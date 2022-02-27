@@ -241,12 +241,9 @@
               path = with pkgs; [ wireguard-tools iptables bash gawk ];
 
               environment = {
-                SUBSPACE_HTTP_HOST = cfg.httpHost;
-                SUBSPACE_HTTP_ADDR = cfg.httpAddr;
-                SUBSPACE_NAMESERVERS = "1.1.1.1,8.8.8.8";
                 SUBSPACE_LISTENPORT = cfg.proxyPort;
-                SUBSPACE_IPV4_POOL = "10.99.97.0/24";
-                SUBSPACE_IPV6_POOL = "fd00::10:97:0/64";
+                SUBSPACE_IPV4_PREF = "10.99.97.";
+                SUBSPACE_IPV6_PREF = "fd00::10:97:";
                 SUBSPACE_IPV4_GW = "10.99.97.1";
                 SUBSPACE_IPV6_GW = "fd00::10:97:1";
                 SUBSPACE_IPV4_NAT_ENABLED = "1";
