@@ -9,7 +9,6 @@ import (
 	"os"
 	"regexp"
 	"strings"
-
 	"github.com/crewjam/saml/samlsp"
 	"github.com/julienschmidt/httprouter"
 	"github.com/pquerna/otp/totp"
@@ -468,7 +467,7 @@ cd {{$.Datadir}}/wireguard
 wg_private_key="$(wg genkey)"
 wg_public_key="$(echo $wg_private_key | wg pubkey)"
 
-wg set wg0 peer ${wg_public_key} allowed-ips {{if .Ipv4Enabled}}{{$.IPv4Pref}}{{$.Profile.Number}}/32{{end}}{{if .Ipv6Enabled}}{{if .Ipv4Enabled}},{{end}}{{$.IPv6Pref}}{{$.Profile.Number}}/128{{end}}
+# wg set wg0 peer ${wg_public_key} allowed-ips {{if .Ipv4Enabled}}{{$.IPv4Pref}}{{$.Profile.Number}}/32{{end}}{{if .Ipv6Enabled}}{{if .Ipv4Enabled}},{{end}}{{$.IPv6Pref}}{{$.Profile.Number}}/128{{end}}
 
 cat <<WGPEER >peers/{{$.Profile.ID}}.conf
 [Peer]

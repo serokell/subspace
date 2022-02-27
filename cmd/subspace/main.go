@@ -89,9 +89,9 @@ func init() {
 	cli.StringVar(&datadir, "datadir", "/data", "data dir")
 	cli.StringVar(&backlink, "backlink", "/", "backlink (optional)")
 	cli.StringVar(&httpHost, "http-host", "", "HTTP host")
-	cli.StringVar(&httpAddr, "http-addr", ":80", "HTTP listen address")
+	cli.StringVar(&httpAddr, "http-addr", ":5555", "HTTP listen address")
 	cli.BoolVar(&httpInsecure, "http-insecure", false, "enable sessions cookies for http (no https) not recommended")
-	cli.BoolVar(&letsencrypt, "letsencrypt", true, "enable TLS using Let's Encrypt on port 443")
+	cli.BoolVar(&letsencrypt, "letsencrypt", false, "enable TLS using Let's Encrypt on port 443")
 	cli.BoolVar(&showVersion, "version", false, "display version and exit")
 	cli.BoolVar(&showHelp, "help", false, "display help and exit")
 	cli.BoolVar(&debug, "debug", false, "debug mode")
@@ -261,13 +261,13 @@ func main() {
 
 		httpd := &http.Server{
 			Handler:        certmanager.HTTPHandler(redir),
-			Addr:           net.JoinHostPort(httpIP, "80"),
+			Addr:           net.JoinHostPort(httpIP, "1080"),
 			WriteTimeout:   httpTimeout,
 			ReadTimeout:    httpTimeout,
 			MaxHeaderBytes: maxHeaderBytes,
 		}
 		if err := httpd.ListenAndServe(); err != nil {
-			logger.Fatalf("http server on port 80 failed: %s", err)
+			logger.Fatalf("http server on port 1080 failed: %s", err)
 		}
 	}()
 

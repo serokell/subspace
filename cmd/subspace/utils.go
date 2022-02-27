@@ -62,7 +62,7 @@ set -o xtrace
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
-	output, err := exec.CommandContext(ctx, "/bin/bash", "-c", string(script.Bytes())).CombinedOutput()
+	output, err := exec.CommandContext(ctx, "/usr/bin/env", "bash", "-c", string(script.Bytes())).CombinedOutput()
 	if err != nil {
 		return string(output), fmt.Errorf("command failed: %s\n%s", err, string(output))
 	}
