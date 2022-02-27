@@ -10,7 +10,7 @@
         in
         pkgs.buildGoPackage {
           inherit goPackagePath version;
-          src = ./.;
+          src = nixpkgs.lib.cleanSource ./.;
           name = "subspace";
           goDeps = ./deps.nix;
           nativeBuildInputs = with pkgs; [ go-bindata which diffutils ];
@@ -116,23 +116,23 @@
           };
 
           config = mkIf cfg.enable {
-            # users.users = optionalAttrs (cfg.user == "subspace") ({
-            #   subspace = {
-            #     isSystemUser = true;
-            #     group = cfg.group;
-            #     # uid = config.ids.uids.subspace;
-            #     description = "Subspace WireGuard GUI user";
-            #     home = cfg.dataDir;
-            #   };
-            # });
+            users.users = optionalAttrs (cfg.user == "subspace") ({
+              subspace = {
+                isSystemUser = true;
+                group = cfg.group;
+                # uid = config.ids.uids.subspace;
+                description = "Subspace WireGuard GUI user";
+                home = cfg.dataDir;
+              };
+            });
 
-            # users.groups = optionalAttrs (cfg.group == "subspace") ({
-            #   subspace = {
+            users.groups = optionalAttrs (cfg.group == "subspace") ({
+              subspace = {
                 # gid = config.ids.gids.subspace;
-            #   };
-            # });
+              };
+            });
 
-            # systemd.tmpfiles.rules = [ "d ${cfg.dataDir} 0750 ${cfg.user} ${cfg.group}" ];
+            systemd.tmpfiles.rules = [ "d ${cfg.dataDir} 0750 ${cfg.user} ${cfg.group}" ];
 
             systemd.services.subspace = rec {
               description = "A simple WireGuard VPN server GUI";
@@ -140,31 +140,103 @@
               after = [ "network.target" ];
 
               serviceConfig = {
-                # User = cfg.user;
-                # Group = cfg.group;
+                User = cfg.user;
+                Group = cfg.group;
+
+                CapabilityBoundingSet = "CAP_NET_ADMIN";
+                AmbientCapabilities = "CAP_NET_ADMIN";
+
+                ReadWritePaths = [ "${cfg.dataDir}" ];
+                RestrictAddressFamilies = [
+                  "AF_INET"
+                  "AF_INET6"
+                  "AF_NETLINK"
+                ];
+
+                RestrictNamespaces = "yes";
+                DeviceAllow = "no";
+                KeyringMode = "private";
+                NoNewPrivileges = "yes";
+                NotifyAccess = "none";
+                PrivateDevices = "yes";
+                PrivateMounts = "yes";
+                PrivateTmp = "yes";
+                ProtectClock = "yes";
+                ProtectControlGroups = "yes";
+                ProtectHome = "yes";
+                ProtectKernelLogs = "yes";
+                ProtectKernelModules = "yes";
+                ProtectKernelTunables = "yes";
+                ProtectProc = "invisible";
+                ProtectSystem = "strict";
+                RestrictSUIDSGID = "yes";
+                SystemCallArchitectures = "native";
+                SystemCallFilter = [
+                  "~@clock"
+                  "~@debug"
+                  "~@module"
+                  "~@mount"
+                  "~@raw-io"
+                  "~@reboot"
+                  "~@swap"
+                  "~@privileged"
+                  "~@resources"
+                  "~@cpu-emulation"
+                  "~@obsolete"
+                ];
+                RestrictRealtime = "yes";
+                Delegate = "no";
+                LockPersonality = "yes";
+                MemoryDenyWriteExecute = "yes";
+                RemoveIPC = "yes";
+                UMask = "0027";
+                ProtectHostname = "yes";
+                ProcSubset = "pid";
+
                 WorkingDirectory = "${cfg.package}/libexec";
+
+                ExecStartPre =
+                  let
+                    preStart = pkgs.writeShellScript "subspace-pre-start" ''
+                      pushd ${cfg.dataDir}
+
+                      mkdir -p wireguard/clients
+                      touch wireguard/clients/null.conf
+
+                      mkdir -p wireguard/peers
+                      touch wireguard/peers/null.conf
+
+                      cp ${cfg.privateKeyFile} wireguard/server.private
+                      cat ${cfg.privateKeyFile} | ${pkgs.wireguard-tools}/bin/wg pubkey > server.public
+
+                      {
+                        echo "[Interface]"
+                        echo "PrivateKey = $(cat wireguard/server.private)"
+                        echo "ListenPort = ${cfg.proxyPort}"
+                        echo
+                        cat wireguard/peers/*
+                      } > wireguard/subspace.conf
+
+                      wg-quick up ${cfg.dataDir}/wireguard/subspace.conf
+                      iptables -A POSTROUTING -t nat -j MASQUERADE -s ${environment.SUBSPACE_IPV4_POOL} -o ${cfg.masqueradeInterface}
+                      ip6tables -A POSTROUTING -t nat -j MASQUERADE -s ${environment.SUBSPACE_IPV6_POOL} -o ${cfg.masqueradeInterface}
+
+                      chmod -R u+rwX,g+rX,o-rwx ${cfg.dataDir}
+                      chown -R ${cfg.user}:${cfg.group} ${cfg.dataDir}
+                    '';
+                  in
+                  "+" + preStart;
+
+                ExecStopPost =
+                  let
+                    postStop = pkgs.writeShellScript "subspace-post-stop" ''
+                      wg-quick down ${cfg.dataDir}/wireguard/subspace.conf
+                      iptables -D POSTROUTING -t nat -j MASQUERADE -s ${environment.SUBSPACE_IPV4_POOL} -o ${cfg.masqueradeInterface}
+                      ip6tables -D POSTROUTING -t nat -j MASQUERADE -s ${environment.SUBSPACE_IPV6_POOL} -o ${cfg.masqueradeInterface}
+                    '';
+                  in
+                  "+" + postStop;
               };
-
-              preStart = ''
-                pushd ${cfg.dataDir}
-
-                mkdir -p wireguard/clients
-                touch wireguard/clients/null.conf
-
-                mkdir -p wireguard/peers
-                touch wireguard/peers/null.conf
-
-                cp ${cfg.privateKeyFile} wireguard/server.private
-                cat ${cfg.privateKeyFile} | ${pkgs.wireguard-tools}/bin/wg pubkey > server.public
-
-                {
-                  echo "[Interface]"
-                  echo "PrivateKey = $(cat wireguard/server.private)"
-                  echo "ListenPort = ${cfg.proxyPort}"
-                  echo
-                  cat wireguard/peers/*
-                } > wireguard/subspace.conf
-              '';
 
               path = with pkgs; [ wireguard-tools iptables bash gawk ];
 
@@ -183,9 +255,6 @@
               };
 
               script = ''
-                wg-quick up ${cfg.dataDir}/wireguard/subspace.conf
-                iptables -A POSTROUTING -t nat -j MASQUERADE -s ${environment.SUBSPACE_IPV4_POOL} -o ${cfg.masqueradeInterface}
-                ip6tables -A POSTROUTING -t nat -j MASQUERADE -s ${environment.SUBSPACE_IPV6_POOL} -o ${cfg.masqueradeInterface}
                 ${cfg.package}/bin/subspace \
                   --http-host="${cfg.httpHost}" \
                   --backlink="${cfg.backlink}" \
@@ -196,13 +265,6 @@
                   --letsencrypt="${if cfg.letsencrypt then "true" else "false"}" \
                   ${cfg.params}
               '';
-
-              postStop = ''
-                wg-quick down ${cfg.dataDir}/wireguard/subspace.conf
-                iptables -D POSTROUTING -t nat -j MASQUERADE -s ${environment.SUBSPACE_IPV4_POOL} -o ${cfg.masqueradeInterface}
-                ip6tables -D POSTROUTING -t nat -j MASQUERADE -s ${environment.SUBSPACE_IPV6_POOL} -o ${cfg.masqueradeInterface}
-              '';
-
             };
           };
         }
