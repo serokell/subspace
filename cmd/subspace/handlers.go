@@ -461,6 +461,10 @@ func profileAddHandler(w *Web) {
 	if shouldDisableDNS := getEnv("SUBSPACE_DISABLE_DNS", "0"); shouldDisableDNS == "1" {
 		disableDNS = true
 	}
+	reloadScript := ""
+	if  reloadScript_ := getEnv("SUBSPACE_WIREGUARD_RELOAD_SCRIPT", ""); reloadScript == "" {
+		reloadScript = reloadScript_
+	}
 
 	script := `
 cd {{$.Datadir}}/wireguard
@@ -468,6 +472,7 @@ wg_private_key="$(wg genkey)"
 wg_public_key="$(echo $wg_private_key | wg pubkey)"
 
 # wg set wg0 peer ${wg_public_key} allowed-ips {{if .Ipv4Enabled}}{{$.IPv4Pref}}{{$.Profile.Number}}/32{{end}}{{if .Ipv6Enabled}}{{if .Ipv4Enabled}},{{end}}{{$.IPv6Pref}}{{$.Profile.Number}}/128{{end}}
+{{$.ReloadScript}}
 
 cat <<WGPEER >peers/{{$.Profile.ID}}.conf
 [Peer]
@@ -502,6 +507,7 @@ WGCLIENT
 		IPv6Cidr     string
 		Listenport   string
 		AllowedIPS   string
+		ReloadScript string
 		Ipv4Enabled  bool
 		Ipv6Enabled  bool
 		DisableDNS   bool
@@ -517,6 +523,7 @@ WGCLIENT
 		ipv6Cidr,
 		listenport,
 		allowedips,
+		reloadScript,
 		ipv4Enabled,
 		ipv6Enabled,
 		disableDNS,
