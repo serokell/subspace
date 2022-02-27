@@ -5,19 +5,6 @@
     {
       defaultPackage = onPkgs (_: pkgs:
         let
-          deps = pkgs.runCommand "subspace-deps"
-            {
-              buildInputs = with pkgs; [ go cacert ];
-              outputHashAlgo = "sha256";
-              outputHashMode = "recursive";
-              outputHash = "";
-            } ''
-            mkdir -p $out
-            export HOME=/build
-            export GOPATH=$out
-            cd ${./.}
-            go install ./cmd/subspace
-          '';
           goPackagePath = "github.com/subspacecommunity/subspace";
           version = "1.5.0";
         in
@@ -112,41 +99,49 @@
               default = ":3331";
               type = types.str;
             };
-
             params = mkOption {
               description = "Parameters for Subspace binary";
               default = "";
               type = types.str;
             };
+            proxyPort = mkOption {
+              description = "Port for managed WireGuard interface";
+              default = "53222";
+              type = types.str;
+            };
+            masqueradeInterface = mkOption {
+              description = "What interface to use to proxy traffic";
+              type = types.str;
+            };
           };
 
           config = mkIf cfg.enable {
-            users.users = optionalAttrs (cfg.user == "subspace") ({
-              subspace = {
-                isSystemUser = true;
-                group = cfg.group;
-                # uid = config.ids.uids.subspace;
-                description = "Subspace WireGuard GUI user";
-                home = cfg.dataDir;
-              };
-            });
+            # users.users = optionalAttrs (cfg.user == "subspace") ({
+            #   subspace = {
+            #     isSystemUser = true;
+            #     group = cfg.group;
+            #     # uid = config.ids.uids.subspace;
+            #     description = "Subspace WireGuard GUI user";
+            #     home = cfg.dataDir;
+            #   };
+            # });
 
-            users.groups = optionalAttrs (cfg.group == "subspace") ({
-              subspace = {
+            # users.groups = optionalAttrs (cfg.group == "subspace") ({
+            #   subspace = {
                 # gid = config.ids.gids.subspace;
-              };
-            });
+            #   };
+            # });
 
-            systemd.tmpfiles.rules = [ "d ${cfg.dataDir} 0750 ${cfg.user} ${cfg.group}" ];
+            # systemd.tmpfiles.rules = [ "d ${cfg.dataDir} 0750 ${cfg.user} ${cfg.group}" ];
 
-            systemd.services.subspace = {
+            systemd.services.subspace = rec {
               description = "A simple WireGuard VPN server GUI";
               wantedBy = [ "multi-user.target" ];
               after = [ "network.target" ];
 
               serviceConfig = {
-                User = cfg.user;
-                Group = cfg.group;
+                # User = cfg.user;
+                # Group = cfg.group;
                 WorkingDirectory = "${cfg.package}/libexec";
               };
 
@@ -161,9 +156,36 @@
 
                 cp ${cfg.privateKeyFile} wireguard/server.private
                 cat ${cfg.privateKeyFile} | ${pkgs.wireguard-tools}/bin/wg pubkey > server.public
+
+                {
+                  echo "[Interface]"
+                  echo "PrivateKey = $(cat wireguard/server.private)"
+                  echo "ListenPort = ${cfg.proxyPort}"
+                  echo
+                  cat wireguard/peers/*
+                } > wireguard/subspace.conf
               '';
 
+              path = with pkgs; [ wireguard-tools iptables bash gawk ];
+
+              environment = {
+                SUBSPACE_HTTP_HOST = cfg.httpHost;
+                SUBSPACE_HTTP_ADDR = cfg.httpAddr;
+                SUBSPACE_NAMESERVERS = "1.1.1.1,8.8.8.8";
+                SUBSPACE_LISTENPORT = cfg.proxyPort;
+                SUBSPACE_IPV4_POOL = "10.99.97.0/24";
+                SUBSPACE_IPV6_POOL = "fd00::10:97:0/64";
+                SUBSPACE_IPV4_GW = "10.99.97.1";
+                SUBSPACE_IPV6_GW = "fd00::10:97:1";
+                SUBSPACE_IPV4_NAT_ENABLED = "1";
+                SUBSPACE_IPV6_NAT_ENABLED = "1";
+                SUBSPACE_DISABLE_DNS = "0";
+              };
+
               script = ''
+                wg-quick up ${cfg.dataDir}/wireguard/subspace.conf
+                iptables -A POSTROUTING -t nat -j MASQUERADE -s ${environment.SUBSPACE_IPV4_POOL} -o ${cfg.masqueradeInterface}
+                ip6tables -A POSTROUTING -t nat -j MASQUERADE -s ${environment.SUBSPACE_IPV6_POOL} -o ${cfg.masqueradeInterface}
                 ${cfg.package}/bin/subspace \
                   --http-host="${cfg.httpHost}" \
                   --backlink="${cfg.backlink}" \
@@ -174,6 +196,13 @@
                   --letsencrypt="${if cfg.letsencrypt then "true" else "false"}" \
                   ${cfg.params}
               '';
+
+              postStop = ''
+                wg-quick down ${cfg.dataDir}/wireguard/subspace.conf
+                iptables -D POSTROUTING -t nat -j MASQUERADE -s ${environment.SUBSPACE_IPV4_POOL} -o ${cfg.masqueradeInterface}
+                ip6tables -D POSTROUTING -t nat -j MASQUERADE -s ${environment.SUBSPACE_IPV6_POOL} -o ${cfg.masqueradeInterface}
+              '';
+
             };
           };
         }

@@ -471,8 +471,7 @@ cd {{$.Datadir}}/wireguard
 wg_private_key="$(wg genkey)"
 wg_public_key="$(echo $wg_private_key | wg pubkey)"
 
-# wg set wg0 peer ${wg_public_key} allowed-ips {{if .Ipv4Enabled}}{{$.IPv4Pref}}{{$.Profile.Number}}/32{{end}}{{if .Ipv6Enabled}}{{if .Ipv4Enabled}},{{end}}{{$.IPv6Pref}}{{$.Profile.Number}}/128{{end}}
-{{$.ReloadScript}}
+wg set subspace peer ${wg_public_key} allowed-ips {{if .Ipv4Enabled}}{{$.IPv4Pref}}{{$.Profile.Number}}/32{{end}}{{if .Ipv6Enabled}}{{if .Ipv4Enabled}},{{end}}{{$.IPv6Pref}}{{$.Profile.Number}}/128{{end}}
 
 cat <<WGPEER >peers/{{$.Profile.ID}}.conf
 [Peer]
@@ -507,7 +506,6 @@ WGCLIENT
 		IPv6Cidr     string
 		Listenport   string
 		AllowedIPS   string
-		ReloadScript string
 		Ipv4Enabled  bool
 		Ipv6Enabled  bool
 		DisableDNS   bool
@@ -523,7 +521,6 @@ WGCLIENT
 		ipv6Cidr,
 		listenport,
 		allowedips,
-		reloadScript,
 		ipv4Enabled,
 		ipv6Enabled,
 		disableDNS,
@@ -693,7 +690,7 @@ func deleteProfile(profile Profile) error {
 # WireGuard
 cd {{$.Datadir}}/wireguard
 peerid=$(cat peers/{{$.Profile.ID}}.conf | awk '/PublicKey/ { printf("%s", $3) }' )
-wg set wg0 peer $peerid remove
+wg set subspace peer $peerid remove
 rm peers/{{$.Profile.ID}}.conf
 rm clients/{{$.Profile.ID}}.conf
 `
