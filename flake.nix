@@ -112,9 +112,36 @@
               default = "53222";
               type = types.str;
             };
+
             masqueradeInterface = mkOption {
               description = "What interface to use to proxy traffic";
               type = types.str;
+            };
+
+            ipv4Pref = mkOption {
+              description = "Cursed IPv4 subnet preference";
+              default = "10.99.97.";
+              type = types.str;
+            };
+            ipv6Pref = mkOption {
+              description = "Cursed IPv6 subnet preference";
+              default = "fd00::10:97:";
+              type = types.str;
+            };
+            ipv4Gw = mkOption {
+              description = "IPv4 address to be used as a gateway";
+              default = "10.99.97.1";
+              type = types.str;
+            };
+            ipv6Gw = mkOption {
+              description = "IPv6 address to be used as a gateway";
+              default = "fd00::10:97:1";
+              type = types.str;
+            };
+            disableDns = mkOption {
+              default = false;
+              description = "Disable configuring the chosen gateway as a DNS server";
+              type = types.bool;
             };
           };
 
@@ -227,17 +254,14 @@
               path = with pkgs; [ wireguard-tools iptables bash gawk ];
 
               environment = {
-                SUBSPACE_HTTP_HOST = cfg.httpHost;
-                SUBSPACE_HTTP_ADDR = cfg.httpAddr;
-                SUBSPACE_NAMESERVERS = "1.1.1.1,8.8.8.8";
                 SUBSPACE_LISTENPORT = cfg.proxyPort;
-                SUBSPACE_IPV4_POOL = "10.99.97.0/24";
-                SUBSPACE_IPV6_POOL = "fd00::10:97:0/64";
-                SUBSPACE_IPV4_GW = "10.99.97.1";
-                SUBSPACE_IPV6_GW = "fd00::10:97:1";
+                SUBSPACE_IPV4_PREF = cfg.ipv4Pref;
+                SUBSPACE_IPV6_PREF = cfg.ipv6Pref;
+                SUBSPACE_IPV4_GW = cfg.ipv4Gw;
+                SUBSPACE_IPV6_GW = cfg.ipv6Gw;
                 SUBSPACE_IPV4_NAT_ENABLED = "1";
                 SUBSPACE_IPV6_NAT_ENABLED = "1";
-                SUBSPACE_DISABLE_DNS = "0";
+                SUBSPACE_DISABLE_DNS = if cfg.disableDns then "1" else "0";
               };
 
               script = ''
