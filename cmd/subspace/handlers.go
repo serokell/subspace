@@ -9,6 +9,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+
 	"github.com/crewjam/saml/samlsp"
 	"github.com/julienschmidt/httprouter"
 	"github.com/pquerna/otp/totp"
@@ -413,117 +414,24 @@ func profileAddHandler(w *Web) {
 		return
 	}
 
-	ipv4Pref := "10.99.97."
-	if pref := getEnv("SUBSPACE_IPV4_PREF", "nil"); pref != "nil" {
-		ipv4Pref = pref
-	}
-	ipv4Gw := "10.99.97.1"
-	if gw := getEnv("SUBSPACE_IPV4_GW", "nil"); gw != "nil" {
-		ipv4Gw = gw
-	}
-	ipv4Cidr := "24"
-	if cidr := getEnv("SUBSPACE_IPV4_CIDR", "nil"); cidr != "nil" {
-		ipv4Cidr = cidr
-	}
-	ipv6Pref := "fd00::10:97:"
-	if pref := getEnv("SUBSPACE_IPV6_PREF", "nil"); pref != "nil" {
-		ipv6Pref = pref
-	}
-	ipv6Gw := "fd00::10:97:1"
-	if gw := getEnv("SUBSPACE_IPV6_GW", "nil"); gw != "nil" {
-		ipv6Gw = gw
-	}
-	ipv6Cidr := "64"
-	if cidr := getEnv("SUBSPACE_IPV6_CIDR", "nil"); cidr != "nil" {
-		ipv6Cidr = cidr
-	}
-	listenport := "51820"
-	if port := getEnv("SUBSPACE_LISTENPORT", "nil"); port != "nil" {
-		listenport = port
-	}
-	endpointHost := httpHost
-	if eh := getEnv("SUBSPACE_ENDPOINT_HOST", "nil"); eh != "nil" {
-		endpointHost = eh
-	}
-	allowedips := "0.0.0.0/0, ::/0"
-	if ips := getEnv("SUBSPACE_ALLOWED_IPS", "nil"); ips != "nil" {
-		allowedips = ips
-	}
-	ipv4Enabled := true
-	if enable := getEnv("SUBSPACE_IPV4_NAT_ENABLED", "1"); enable == "0" {
-		ipv4Enabled = false
-	}
-	ipv6Enabled := true
-	if enable := getEnv("SUBSPACE_IPV6_NAT_ENABLED", "1"); enable == "0" {
-		ipv6Enabled = false
-	}
-	disableDNS := false
-	if shouldDisableDNS := getEnv("SUBSPACE_DISABLE_DNS", "0"); shouldDisableDNS == "1" {
-		disableDNS = true
-	}
-	reloadScript := ""
-	if  reloadScript_ := getEnv("SUBSPACE_WIREGUARD_RELOAD_SCRIPT", ""); reloadScript == "" {
-		reloadScript = reloadScript_
-	}
-
 	script := `
-cd {{$.Datadir}}/wireguard
-wg_private_key="$(wg genkey)"
-wg_public_key="$(echo $wg_private_key | wg pubkey)"
+	cd {{$.Datadir}}/wireguard
 
-wg set subspace peer ${wg_public_key} allowed-ips {{if .Ipv4Enabled}}{{$.IPv4Pref}}{{$.Profile.Number}}/32{{end}}{{if .Ipv6Enabled}}{{if .Ipv4Enabled}},{{end}}{{$.IPv6Pref}}{{$.Profile.Number}}/128{{end}}
+	wg-bond add {{$.Profile.ID}} --dns 1.1.1.1
+	wg-bond conf {{$.Profile.ID}} -T subspace-root > clients/{{$.Profile.ID}}.conf
 
-cat <<WGPEER >peers/{{$.Profile.ID}}.conf
-[Peer]
-PublicKey = ${wg_public_key}
-AllowedIPs = {{if .Ipv4Enabled}}{{$.IPv4Pref}}{{$.Profile.Number}}/32{{end}}{{if .Ipv6Enabled}}{{if .Ipv4Enabled}},{{end}}{{$.IPv6Pref}}{{$.Profile.Number}}/128{{end}}
-WGPEER
+	# Syncing configuration
+	wg-bond conf subspace-root > subspace.conf
+	wg-quick strip ./subspace.conf > sync.conf
+	wg syncconf subspace ./sync.conf
 
-cat <<WGCLIENT >clients/{{$.Profile.ID}}.conf
-[Interface]
-PrivateKey = ${wg_private_key}
-{{- if not .DisableDNS }}
-DNS = {{if .Ipv4Enabled}}{{$.IPv4Gw}}{{end}}{{if .Ipv6Enabled}}{{if .Ipv4Enabled}},{{end}}{{$.IPv6Gw}}{{end}}
-{{- end }}
-Address = {{if .Ipv4Enabled}}{{$.IPv4Pref}}{{$.Profile.Number}}/{{$.IPv4Cidr}}{{end}}{{if .Ipv6Enabled}}{{if .Ipv4Enabled}},{{end}}{{$.IPv6Pref}}{{$.Profile.Number}}/{{$.IPv6Cidr}}{{end}}
-
-[Peer]
-PublicKey = $(cat server.public)
-
-Endpoint = {{$.EndpointHost}}:{{$.Listenport}}
-AllowedIPs = {{$.AllowedIPS}}
-WGCLIENT
-`
+	`
 	_, err = bash(script, struct {
-		Profile      Profile
-		EndpointHost string
-		Datadir      string
-		IPv4Gw       string
-		IPv6Gw       string
-		IPv4Pref     string
-		IPv6Pref     string
-		IPv4Cidr     string
-		IPv6Cidr     string
-		Listenport   string
-		AllowedIPS   string
-		Ipv4Enabled  bool
-		Ipv6Enabled  bool
-		DisableDNS   bool
+		Profile Profile
+		Datadir string
 	}{
 		profile,
-		endpointHost,
 		datadir,
-		ipv4Gw,
-		ipv6Gw,
-		ipv4Pref,
-		ipv6Pref,
-		ipv4Cidr,
-		ipv6Cidr,
-		listenport,
-		allowedips,
-		ipv4Enabled,
-		ipv6Enabled,
-		disableDNS,
 	})
 	if err != nil {
 		logger.Warn(err)
@@ -695,13 +603,16 @@ func helpHandler(w *Web) {
 //
 func deleteProfile(profile Profile) error {
 	script := `
-# WireGuard
-cd {{$.Datadir}}/wireguard
-peerid=$(cat peers/{{$.Profile.ID}}.conf | awk '/PublicKey/ { printf("%s", $3) }' )
-wg set subspace peer $peerid remove
-rm peers/{{$.Profile.ID}}.conf
-rm clients/{{$.Profile.ID}}.conf
-`
+		cd {{$.Datadir}}/wireguard
+
+		wg-bond rm {{$.Profile.ID}}
+
+		# Syncing configuration
+		wg-bond conf subspace-root > subspace.conf
+		wg-quick strip ./subspace.conf > sync.conf
+		wg syncconf subspace ./sync.conf
+	`
+
 	output, err := bash(script, struct {
 		Datadir string
 		Profile Profile

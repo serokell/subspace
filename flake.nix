@@ -31,6 +31,9 @@
           '';
         }
       );
+      devShell = onPkgs (_: pkgs: with pkgs; mkShell {
+        buildInputs = [ wg-bond go go-bindata ];
+      });
 
       nixosModule = { pkgs, lib, config, ... }:
         with lib;
