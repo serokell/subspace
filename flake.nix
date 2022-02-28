@@ -220,6 +220,8 @@
                       wg-quick up ${cfg.dataDir}/wireguard/subspace.conf
                       iptables -A POSTROUTING -t nat -j MASQUERADE -s ${environment.SUBSPACE_IPV4_PREF}0/24 -o ${cfg.masqueradeInterface}
                       ip6tables -A POSTROUTING -t nat -j MASQUERADE -s ${environment.SUBSPACE_IPV6_PREF}/112 -o ${cfg.masqueradeInterface}
+                      ip addr add dev subspace ${environment.SUBSPACE_IPV4_PREF}1/24
+                      ip addr add dev subspace ${environment.SUBSPACE_IPV6_PREF}1/112
 
                       chmod -R u+rwX,g+rX,o-rwx ${cfg.dataDir}
                       chown -R ${cfg.user}:${cfg.group} ${cfg.dataDir}
