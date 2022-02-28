@@ -206,23 +206,8 @@
                       mkdir -p wireguard/clients
                       touch wireguard/clients/null.conf
 
-                      mkdir -p wireguard/peers
-                      touch wireguard/peers/null.conf
-
-                      cp ${cfg.privateKeyFile} wireguard/server.private
-                      cat ${cfg.privateKeyFile} | ${pkgs.wireguard-tools}/bin/wg pubkey > server.public
-
-                      {
-                        echo "[Interface]"
-                        echo "PrivateKey = $(cat wireguard/server.private)"
-                        echo "ListenPort = ${cfg.proxyPort}"
-                        echo
-                        cat wireguard/peers/*
-                      } > wireguard/subspace.conf
-
+                      wg-bond conf subspace-root > ${cfg.dataDir}/wireguard/subspace.conf
                       wg-quick up ${cfg.dataDir}/wireguard/subspace.conf
-                      iptables -A POSTROUTING -t nat -j MASQUERADE -s ${environment.SUBSPACE_IPV4_POOL} -o ${cfg.masqueradeInterface}
-                      ip6tables -A POSTROUTING -t nat -j MASQUERADE -s ${environment.SUBSPACE_IPV6_POOL} -o ${cfg.masqueradeInterface}
 
                       chmod -R u+rwX,g+rX,o-rwx ${cfg.dataDir}
                       chown -R ${cfg.user}:${cfg.group} ${cfg.dataDir}
@@ -234,8 +219,6 @@
                   let
                     postStop = pkgs.writeShellScript "subspace-post-stop" ''
                       wg-quick down ${cfg.dataDir}/wireguard/subspace.conf
-                      iptables -D POSTROUTING -t nat -j MASQUERADE -s ${environment.SUBSPACE_IPV4_POOL} -o ${cfg.masqueradeInterface}
-                      ip6tables -D POSTROUTING -t nat -j MASQUERADE -s ${environment.SUBSPACE_IPV6_POOL} -o ${cfg.masqueradeInterface}
                     '';
                   in
                   "+" + postStop;
