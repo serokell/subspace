@@ -218,8 +218,8 @@
                       } > wireguard/subspace.conf
 
                       wg-quick up ${cfg.dataDir}/wireguard/subspace.conf
-                      iptables -A POSTROUTING -t nat -j MASQUERADE -s ${environment.SUBSPACE_IPV4_POOL} -o ${cfg.masqueradeInterface}
-                      ip6tables -A POSTROUTING -t nat -j MASQUERADE -s ${environment.SUBSPACE_IPV6_POOL} -o ${cfg.masqueradeInterface}
+                      iptables -A POSTROUTING -t nat -j MASQUERADE -s ${environment.SUBSPACE_IPV4_PREF}0/24 -o ${cfg.masqueradeInterface}
+                      ip6tables -A POSTROUTING -t nat -j MASQUERADE -s ${environment.SUBSPACE_IPV6_PREF}/112 -o ${cfg.masqueradeInterface}
 
                       chmod -R u+rwX,g+rX,o-rwx ${cfg.dataDir}
                       chown -R ${cfg.user}:${cfg.group} ${cfg.dataDir}
@@ -231,8 +231,8 @@
                   let
                     postStop = pkgs.writeShellScript "subspace-post-stop" ''
                       wg-quick down ${cfg.dataDir}/wireguard/subspace.conf
-                      iptables -D POSTROUTING -t nat -j MASQUERADE -s ${environment.SUBSPACE_IPV4_POOL} -o ${cfg.masqueradeInterface}
-                      ip6tables -D POSTROUTING -t nat -j MASQUERADE -s ${environment.SUBSPACE_IPV6_POOL} -o ${cfg.masqueradeInterface}
+                      iptables -D POSTROUTING -t nat -j MASQUERADE -s ${environment.SUBSPACE_IPV4_PREF}0/24 -o ${cfg.masqueradeInterface}
+                      ip6tables -D POSTROUTING -t nat -j MASQUERADE -s ${environment.SUBSPACE_IPV6_PREF}/112 -o ${cfg.masqueradeInterface}
                     '';
                   in
                   "+" + postStop;
