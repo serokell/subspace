@@ -277,7 +277,7 @@
                 SUBSPACE_IPV6_GW = cfg.ipv6Gw;
                 SUBSPACE_IPV4_NAT_ENABLED = "1";
                 SUBSPACE_IPV6_NAT_ENABLED = "1";
-                SUBSPACE_DISABLE_DNS = if cfg.disableDns then "true" else "false";
+                SUBSPACE_DISABLE_DNS = if cfg.disableDns then "1" else "0";
               };
 
               script = ''
