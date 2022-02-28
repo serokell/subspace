@@ -109,9 +109,36 @@
               default = "53222";
               type = types.str;
             };
+
             masqueradeInterface = mkOption {
               description = "What interface to use to proxy traffic";
               type = types.str;
+            };
+
+            ipv4Pref = mkOption {
+              description = "Cursed IPv4 subnet preference";
+              default = "10.99.97.";
+              type = types.str;
+            };
+            ipv6Pref = mkOption {
+              description = "Cursed IPv6 subnet preference";
+              default = "fd00::10:97:";
+              type = types.str;
+            };
+            ipv4Gw = mkOption {
+              description = "IPv4 address to be used as a gateway";
+              default = "10.99.97.1";
+              type = types.str;
+            };
+            ipv6Gw = mkOption {
+              description = "IPv6 address to be used as a gateway";
+              default = "fd00::10:97:1";
+              type = types.str;
+            };
+            disableDns = mkOption {
+              default = false;
+              description = "Disable configuring the chosen gateway as a DNS server";
+              type = types.bool;
             };
           };
 
@@ -218,10 +245,10 @@
                       } > wireguard/subspace.conf
 
                       wg-quick up ${cfg.dataDir}/wireguard/subspace.conf
-                      iptables -A POSTROUTING -t nat -j MASQUERADE -s ${environment.SUBSPACE_IPV4_PREF}0/24 -o ${cfg.masqueradeInterface}
-                      ip6tables -A POSTROUTING -t nat -j MASQUERADE -s ${environment.SUBSPACE_IPV6_PREF}/112 -o ${cfg.masqueradeInterface}
-                      ip addr add dev subspace ${environment.SUBSPACE_IPV4_PREF}1/24
-                      ip addr add dev subspace ${environment.SUBSPACE_IPV6_PREF}1/112
+                      iptables -A POSTROUTING -t nat -j MASQUERADE -s ${cfg.ipv4Pref}0/24 -o ${cfg.masqueradeInterface}
+                      ip6tables -A POSTROUTING -t nat -j MASQUERADE -s ${cfg.ipv6Pref}/112 -o ${cfg.masqueradeInterface}
+                      ip addr add dev subspace ${cfg.ipv4Gw}/24
+                      ip addr add dev subspace ${cfg.ipv6Gw}/112
 
                       chmod -R u+rwX,g+rX,o-rwx ${cfg.dataDir}
                       chown -R ${cfg.user}:${cfg.group} ${cfg.dataDir}
@@ -233,8 +260,8 @@
                   let
                     postStop = pkgs.writeShellScript "subspace-post-stop" ''
                       wg-quick down ${cfg.dataDir}/wireguard/subspace.conf
-                      iptables -D POSTROUTING -t nat -j MASQUERADE -s ${environment.SUBSPACE_IPV4_PREF}0/24 -o ${cfg.masqueradeInterface}
-                      ip6tables -D POSTROUTING -t nat -j MASQUERADE -s ${environment.SUBSPACE_IPV6_PREF}/112 -o ${cfg.masqueradeInterface}
+                      iptables -D POSTROUTING -t nat -j MASQUERADE -s ${cfg.ipv4Pref}0/24 -o ${cfg.masqueradeInterface}
+                      ip6tables -D POSTROUTING -t nat -j MASQUERADE -s ${cfg.ipv6Pref}/112 -o ${cfg.masqueradeInterface}
                     '';
                   in
                   "+" + postStop;
@@ -244,13 +271,13 @@
 
               environment = {
                 SUBSPACE_LISTENPORT = cfg.proxyPort;
-                SUBSPACE_IPV4_PREF = "10.99.97.";
-                SUBSPACE_IPV6_PREF = "fd00::10:97:";
-                SUBSPACE_IPV4_GW = "10.99.97.1";
-                SUBSPACE_IPV6_GW = "fd00::10:97:1";
+                SUBSPACE_IPV4_PREF = cfg.ipv4Pref;
+                SUBSPACE_IPV6_PREF = cfg.ipv6Pref;
+                SUBSPACE_IPV4_GW = cfg.ipv4Gw;
+                SUBSPACE_IPV6_GW = cfg.ipv6Gw;
                 SUBSPACE_IPV4_NAT_ENABLED = "1";
                 SUBSPACE_IPV6_NAT_ENABLED = "1";
-                SUBSPACE_DISABLE_DNS = "0";
+                SUBSPACE_DISABLE_DNS = if cfg.disableDns then "true" else "false";
               };
 
               script = ''
