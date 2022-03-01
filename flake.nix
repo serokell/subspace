@@ -121,37 +121,6 @@
               default = "53222";
               type = types.str;
             };
-
-            masqueradeInterface = mkOption {
-              description = "What interface to use to proxy traffic";
-              type = types.str;
-            };
-
-            ipv4Pref = mkOption {
-              description = "Cursed IPv4 subnet preference";
-              default = "10.99.97.";
-              type = types.str;
-            };
-            ipv6Pref = mkOption {
-              description = "Cursed IPv6 subnet preference";
-              default = "fd00::10:97:";
-              type = types.str;
-            };
-            ipv4Gw = mkOption {
-              description = "IPv4 address to be used as a gateway";
-              default = "10.99.97.1";
-              type = types.str;
-            };
-            ipv6Gw = mkOption {
-              description = "IPv6 address to be used as a gateway";
-              default = "fd00::10:97:1";
-              type = types.str;
-            };
-            disableDns = mkOption {
-              default = false;
-              description = "Disable configuring the chosen gateway as a DNS server";
-              type = types.bool;
-            };
           };
 
           config = mkIf cfg.enable {
@@ -218,7 +187,7 @@
                   "~@raw-io"
                   "~@reboot"
                   "~@swap"
-                  "~@privileged"
+                  # "~@privileged"
                   "~@resources"
                   "~@cpu-emulation"
                   "~@obsolete"
@@ -233,49 +202,21 @@
                 ProcSubset = "pid";
 
                 WorkingDirectory = "${cfg.package}/libexec";
-
-                ExecStartPre =
-                  let
-                    preStart = pkgs.writeShellScript "subspace-pre-start" ''
-                      pushd ${cfg.dataDir}
-
-                      mkdir -p wireguard/clients
-                      touch wireguard/clients/null.conf
-
-                      pushd wireguard
-                      wg-bond conf subspace-root > ${cfg.dataDir}/subspace.conf
-                      wg-quick up ${cfg.dataDir}/subspace.conf
-                      popd
-
-                      chmod -R u+rwX,g+rX,o-rwx ${cfg.dataDir}
-                      chown -R ${cfg.user}:${cfg.group} ${cfg.dataDir}
-
-                      popd
-                    '';
-                  in
-                  "+" + preStart;
-
-                ExecStopPost =
-                  let
-                    postStop = pkgs.writeShellScript "subspace-post-stop" ''
-                      wg-quick down ${cfg.dataDir}/wireguard/subspace.conf
-                    '';
-                  in
-                  "+" + postStop;
               };
 
               path = with pkgs; [ wg-bond self.packages.${system}.patchedWGTools iptables bash gawk ];
 
-              environment = {
-                SUBSPACE_LISTENPORT = cfg.proxyPort;
-                SUBSPACE_IPV4_PREF = cfg.ipv4Pref;
-                SUBSPACE_IPV6_PREF = cfg.ipv6Pref;
-                SUBSPACE_IPV4_GW = cfg.ipv4Gw;
-                SUBSPACE_IPV6_GW = cfg.ipv6Gw;
-                SUBSPACE_IPV4_NAT_ENABLED = "1";
-                SUBSPACE_IPV6_NAT_ENABLED = "1";
-                SUBSPACE_DISABLE_DNS = if cfg.disableDns then "1" else "0";
-              };
+              preStart = ''
+                wg-bond -c ${cfg.dataDir}/wireguard/wg-bond.json conf subspace-root > ${cfg.dataDir}/subspace.conf
+                wg-quick up ${cfg.dataDir}/subspace.conf
+
+                chmod -R u+rwX,g+rX,o-rwx ${cfg.dataDir}
+                chown -R ${cfg.user}:${cfg.group} ${cfg.dataDir}
+              '';
+
+              postStop = ''
+                wg-quick down ${cfg.dataDir}/wireguard/subspace.conf
+              '';
 
               script = ''
                 ${cfg.package}/bin/subspace \
