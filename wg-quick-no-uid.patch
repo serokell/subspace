@@ -1,0 +1,13 @@
+diff --git a/wg-quick/linux.bash b/wg-quick/linux.bash
+index e4d4c4f..bd407d4 100755
+--- a/wg-quick/linux.bash
++++ b/wg-quick/linux.bash
+@@ -82,7 +82,7 @@ read_bool() {
+ }
+
+ auto_su() {
+-	[[ $UID == 0 ]] || exec sudo -p "$PROGRAM must be run as root. Please enter the password for %u to continue: " -- "$BASH" -- "$SELF" "${ARGS[@]}"
++	:
+ }
+
+ add_if() {

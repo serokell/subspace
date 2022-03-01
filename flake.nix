@@ -3,6 +3,15 @@
     let onPkgs = fn: builtins.mapAttrs fn nixpkgs.legacyPackages;
     in
     {
+      packages = onPkgs (_: pkgs:
+        {
+          patchedWGTools = pkgs.wireguard-tools.overrideDerivation (super: {
+            patches = super.patches ++ [
+              ./wg-quick-no-uid.patch
+            ];
+          });
+        }
+      );
       defaultPackage = onPkgs (_: pkgs:
         let
           goPackagePath = "github.com/subspacecommunity/subspace";
@@ -31,8 +40,8 @@
           '';
         }
       );
-      devShell = onPkgs (_: pkgs: with pkgs; mkShell {
-        buildInputs = [ wg-bond go go-bindata ];
+      devShell = onPkgs (system: pkgs: with pkgs; mkShell {
+        buildInputs = [ self.packages.${system}.patchedWGTools wg-bond go go-bindata ];
       });
 
       nixosModule = { pkgs, lib, config, ... }:
@@ -233,11 +242,15 @@
                       mkdir -p wireguard/clients
                       touch wireguard/clients/null.conf
 
+                      pushd wireguard
                       wg-bond conf subspace-root > ${cfg.dataDir}/wireguard/subspace.conf
                       wg-quick up ${cfg.dataDir}/wireguard/subspace.conf
+                      popd
 
                       chmod -R u+rwX,g+rX,o-rwx ${cfg.dataDir}
                       chown -R ${cfg.user}:${cfg.group} ${cfg.dataDir}
+
+                      popd
                     '';
                   in
                   "+" + preStart;
@@ -251,7 +264,7 @@
                   "+" + postStop;
               };
 
-              path = with pkgs; [ wireguard-tools iptables bash gawk ];
+              path = with pkgs; [ wg-bond self.packages.${system}.patchedWGTools iptables bash gawk ];
 
               environment = {
                 SUBSPACE_LISTENPORT = cfg.proxyPort;
