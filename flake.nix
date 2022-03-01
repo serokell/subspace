@@ -3,6 +3,15 @@
     let onPkgs = fn: builtins.mapAttrs fn nixpkgs.legacyPackages;
     in
     {
+      packages = onPkgs (_: pkgs:
+        {
+          patchedWGTools = pkgs.wireguard-tools.overrideDerivation (super: {
+            patches = super.patches ++ [
+              ./wg-quick-no-uid.patch
+            ];
+          });
+        }
+      );
       defaultPackage = onPkgs (_: pkgs:
         let
           goPackagePath = "github.com/subspacecommunity/subspace";
@@ -31,6 +40,9 @@
           '';
         }
       );
+      devShell = onPkgs (system: pkgs: with pkgs; mkShell {
+        buildInputs = [ self.packages.${system}.patchedWGTools wg-bond go go-bindata ];
+      });
 
       nixosModule = { pkgs, lib, config, ... }:
         with lib;
@@ -230,28 +242,15 @@
                       mkdir -p wireguard/clients
                       touch wireguard/clients/null.conf
 
-                      mkdir -p wireguard/peers
-                      touch wireguard/peers/null.conf
-
-                      cp ${cfg.privateKeyFile} wireguard/server.private
-                      cat ${cfg.privateKeyFile} | ${pkgs.wireguard-tools}/bin/wg pubkey > server.public
-
-                      {
-                        echo "[Interface]"
-                        echo "PrivateKey = $(cat wireguard/server.private)"
-                        echo "ListenPort = ${cfg.proxyPort}"
-                        echo
-                        cat wireguard/peers/*
-                      } > wireguard/subspace.conf
-
+                      pushd wireguard
+                      wg-bond conf subspace-root > ${cfg.dataDir}/wireguard/subspace.conf
                       wg-quick up ${cfg.dataDir}/wireguard/subspace.conf
-                      iptables -A POSTROUTING -t nat -j MASQUERADE -s ${cfg.ipv4Pref}0/24 -o ${cfg.masqueradeInterface}
-                      ip6tables -A POSTROUTING -t nat -j MASQUERADE -s ${cfg.ipv6Pref}/112 -o ${cfg.masqueradeInterface}
-                      ip addr add dev subspace ${cfg.ipv4Gw}/24
-                      ip addr add dev subspace ${cfg.ipv6Gw}/112
+                      popd
 
                       chmod -R u+rwX,g+rX,o-rwx ${cfg.dataDir}
                       chown -R ${cfg.user}:${cfg.group} ${cfg.dataDir}
+
+                      popd
                     '';
                   in
                   "+" + preStart;
@@ -260,14 +259,12 @@
                   let
                     postStop = pkgs.writeShellScript "subspace-post-stop" ''
                       wg-quick down ${cfg.dataDir}/wireguard/subspace.conf
-                      iptables -D POSTROUTING -t nat -j MASQUERADE -s ${cfg.ipv4Pref}0/24 -o ${cfg.masqueradeInterface}
-                      ip6tables -D POSTROUTING -t nat -j MASQUERADE -s ${cfg.ipv6Pref}/112 -o ${cfg.masqueradeInterface}
                     '';
                   in
                   "+" + postStop;
               };
 
-              path = with pkgs; [ wireguard-tools iptables bash gawk ];
+              path = with pkgs; [ wg-bond self.packages.${system}.patchedWGTools iptables bash gawk ];
 
               environment = {
                 SUBSPACE_LISTENPORT = cfg.proxyPort;
