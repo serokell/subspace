@@ -243,8 +243,8 @@
                       touch wireguard/clients/null.conf
 
                       pushd wireguard
-                      wg-bond conf subspace-root > ${cfg.dataDir}/wireguard/subspace.conf
-                      wg-quick up ${cfg.dataDir}/wireguard/subspace.conf
+                      wg-bond conf subspace-root > ${cfg.dataDir}/subspace.conf
+                      wg-quick up ${cfg.dataDir}/subspace.conf
                       popd
 
                       chmod -R u+rwX,g+rX,o-rwx ${cfg.dataDir}
