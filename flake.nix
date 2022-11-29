@@ -129,6 +129,11 @@
             default = "53222";
             type = types.str;
           };
+          subnet = mkOption {
+            description = "Subnet to be used by Subspace VPN";
+            default = "10.0.0.0/24";
+            type = types.str;
+          };
         };
 
         config = mkIf cfg.enable {
@@ -215,8 +220,17 @@
             path = with pkgs; [ wg-bond self.packages.${system}.wireguard-tools iptables bash gawk ];
 
             preStart = ''
-              wg-bond -c ${cfg.dataDir}/wireguard/wg-bond.json conf subspace-root > ${cfg.dataDir}/subspace.conf
-              wg-quick up ${cfg.dataDir}/subspace.conf
+              if [[ ! -f ${cfg.dataDir}/wireguard/wg-bond.json ]]; then
+                mkdir -p ${cfg.dataDir}/wireguard/
+                mkdir -p ${cfg.dataDir}/wireguard/clients
+                mkdir -p ${cfg.dataDir}/wireguard/peers
+                wg-bond -c ${cfg.dataDir}/wireguard/wg-bond.json init subspace --network "${cfg.subnet}"
+                wg-bond -c ${cfg.dataDir}/wireguard/wg-bond.json add subspace-root --endpoint ${cfg.httpHost}:${cfg.proxyPort} --center --gateway --masquerade eth0
+              fi
+              if [[ ! -d ${cfg.dataDir}/wireguard/clients ]]; then mkdir -p ${cfg.dataDir}/wireguard/clients; fi
+              if [[ ! -d ${cfg.dataDir}/wireguard/peers ]]; then mkdir -p ${cfg.dataDir}/wireguard/peers; fi
+              wg-bond -c ${cfg.dataDir}/wireguard/wg-bond.json conf subspace-root > ${cfg.dataDir}/wireguard/subspace.conf
+              wg-quick up ${cfg.dataDir}/wireguard/subspace.conf
 
               chmod -R u+rwX,g+rX,o-rwx ${cfg.dataDir}
               chown -R ${cfg.user}:${cfg.group} ${cfg.dataDir}

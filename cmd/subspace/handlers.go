@@ -423,7 +423,8 @@ func profileAddHandler(w *Web) {
 	# Syncing configuration
 	wg-bond conf subspace-root > subspace.conf
 	wg-quick strip ./subspace.conf > sync.conf
-	wg syncconf subspace ./sync.conf
+	wg-quick down ./subspace.conf
+	wg-quick up ./subspace.conf
 
 	`
 	_, err = bash(script, struct {
@@ -610,7 +611,8 @@ func deleteProfile(profile Profile) error {
 		# Syncing configuration
 		wg-bond conf subspace-root > subspace.conf
 		wg-quick strip ./subspace.conf > sync.conf
-		wg syncconf subspace ./sync.conf
+		wg-quick down ./subspace.conf
+		wg-quick up ./subspace.conf
 	`
 
 	output, err := bash(script, struct {
