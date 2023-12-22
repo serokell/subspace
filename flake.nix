@@ -160,9 +160,15 @@
             wantedBy = [ "multi-user.target" ];
             after = [ "network.target" ];
 
+            startLimitBurst = mkDefault 5;
+            startLimitIntervalSec = mkDefault 300;
+
             serviceConfig = {
               User = cfg.user;
               Group = cfg.group;
+
+              Restart = mkDefault "on-failure";
+              RestartSec = mkDefault 10;
 
               CapabilityBoundingSet = "CAP_NET_ADMIN";
               AmbientCapabilities = "CAP_NET_ADMIN";
