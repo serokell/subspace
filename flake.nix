@@ -1,9 +1,12 @@
 {
   description = "A fork of the simple WireGuard VPN server GUI community maintained ";
 
-  inputs.flake-utils.url = "github:numtide/flake-utils";
+  inputs = {
+    flake-utils.url = "github:numtide/flake-utils";
+    wg-bond.url = "github:cab404/wg-bond";
+  };
 
-  outputs = { self, nixpkgs, flake-utils }: (flake-utils.lib.eachDefaultSystem (system:
+  outputs = { self, nixpkgs, flake-utils, wg-bond }: (flake-utils.lib.eachDefaultSystem (system:
     let
       pkgs = import nixpkgs { inherit system; overlays = [ self.overlay ]; };
     in
@@ -14,7 +17,7 @@
       defaultPackage = self.packages.${system}.subspace;
 
       devShell = pkgs.mkShell {
-        buildInputs = with pkgs; [ self.packages.${system}.wireguard-tools wg-bond go go-bindata ];
+        buildInputs = with pkgs; [ self.packages.${system}.wireguard-tools wg-bond.defaultPackage.${system} go go-bindata ];
       };
     })) // {
     overlay = final: prev: {
@@ -223,7 +226,7 @@
               WorkingDirectory = "${cfg.package}/libexec";
             };
 
-            path = with pkgs; [ wg-bond self.packages.${system}.wireguard-tools iptables bash gawk ];
+            path = with pkgs; [ wg-bond.defaultPackage.${system} self.packages.${system}.wireguard-tools iptables bash gawk ];
 
             preStart = ''
               if [[ ! -f ${cfg.dataDir}/wireguard/wg-bond.json ]]; then
