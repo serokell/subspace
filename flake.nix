@@ -3,7 +3,9 @@
 
   inputs = {
     flake-utils.url = "github:numtide/flake-utils";
-    wg-bond.url = "github:cab404/wg-bond";
+
+    # Don't update this this input, as newer versions of wg-bond are no longer compatible with subspace
+    wg-bond.url = "github:cab404/wg-bond/v0.2.0";
   };
 
   outputs = { self, nixpkgs, flake-utils, wg-bond }: (flake-utils.lib.eachDefaultSystem (system:
@@ -13,11 +15,24 @@
     {
       packages.subspace = pkgs.subspace;
       packages.wireguard-tools = pkgs.wireguard-tools;
+      packages.wg-bond = with pkgs; rustPlatform.buildRustPackage {
+        pname = "wg-bond";
+        version = "0.2.0";
+
+        src = wg-bond;
+
+        cargoHash = "sha256-Itw3fnKfUW+67KKB2Y7tutGBTm3E8mGNhBL4MOGEn9o=";
+
+        nativeBuildInputs = [ makeWrapper ];
+        postInstall = ''
+          wrapProgram $out/bin/wg-bond --set PATH ${lib.makeBinPath [ wireguard-tools ]}
+        '';
+      };
 
       defaultPackage = self.packages.${system}.subspace;
 
       devShell = pkgs.mkShell {
-        buildInputs = with pkgs; [ self.packages.${system}.wireguard-tools wg-bond.defaultPackage.${system} go go-bindata ];
+        buildInputs = with pkgs; [ self.packages.${system}.wireguard-tools self.packages.${system}.wg-bond go go-bindata ];
       };
     })) // {
     overlay = final: prev: {
@@ -226,7 +241,7 @@
               WorkingDirectory = "${cfg.package}/libexec";
             };
 
-            path = with pkgs; [ wg-bond.defaultPackage.${system} self.packages.${system}.wireguard-tools iptables bash gawk ];
+            path = with pkgs; [ self.packages.${system}.wg-bond self.packages.${system}.wireguard-tools iptables bash gawk ];
 
             preStart = ''
               if [[ ! -f ${cfg.dataDir}/wireguard/wg-bond.json ]]; then
